@@ -1,6 +1,32 @@
-/.agent
-/.idea
-/.venv
-__pycache__
+# Environments
+/.venv/
 .env
+
+# uv & build artifacts
+dist/
+build/
+*.egg-info/
+wheels/
+.uv/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Linters & test caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Application generated media (config.settings.MEDIA_FOLDER)
+/media/
+
+# IDEs
+/.idea/
+/.vscode/
+
+# Agent & local docs
+/.agent/
 /AGENTS.md
+

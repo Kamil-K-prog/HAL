@@ -1,12 +1,12 @@
+"""
+Смотри markdowns/errors_map.md для пояснений по типам ошибок
+"""
+
 from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
-
-"""
-Смотри markdowns/errors_map.md для пояснений по типам ошибок
-"""
 
 ErrorCategory = Literal[
     "validation_error",  # Невалидные аргументы тула или нарушение инвариантов UMF
@@ -83,7 +83,6 @@ class HalError(Exception):
         )
 
 
-# Если
 class TurnInProgressError(HalError):
     default_code = "TURN_IN_PROGRESS"
     default_category = "concurrency_error"
@@ -91,7 +90,6 @@ class TurnInProgressError(HalError):
     default_user_message = "Can't run turns in parallel! You must wait for turn to finish."
 
 
-# Если
 class InvalidTurnStateError(HalError):
     default_code = "INVALID_TURN_STATE"
     default_category = "concurrency_error"
@@ -99,7 +97,6 @@ class InvalidTurnStateError(HalError):
     default_user_message = "Error occurred while mutating turn state."
 
 
-# Если запрошена смена модели во время незаконченного ReAct
 class ModelSwitchMidTurnError(HalError):
     default_code = "MODEL_SWITCH_MID_TURN"
     default_category = "concurrency_error"
@@ -110,7 +107,6 @@ class ModelSwitchMidTurnError(HalError):
     )
 
 
-# Если не совпадает версия истории, которую нужно дописывать в ChatSession
 class VersionConflictError(HalError):
     default_code = "HISTORY_VERSION_CONFLICT"
     default_category = "concurrency_error"

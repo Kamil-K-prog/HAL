@@ -2,8 +2,7 @@
 
 ---
 
-Работа ведётся в ветке [refactor/SOLIDify](https://github.com/Kamil-K-prog/AI_chat/tree/refactor/SOLIDify). Привожу код
-в порядок!
+Проект полностью переписывается с чистого листа в ветке [rewrite/v2](https://github.com/Kamil-K-prog/HAL/tree/rewrite/v2).
 
 ---
 

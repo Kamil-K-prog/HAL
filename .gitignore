@@ -30,3 +30,4 @@ __pycache__/
 /.agent/
 /AGENTS.md
 
+/uv.lock

@@ -1288,11 +1288,3 @@ class Redactor:
 | **1. Property-Based & Unit (Без I/O)** | `IdFactory`, `HistoryInvariantValidator`, `PromptCompiler`, `ResponseParser`, `SchemaCompiler`, `ToolCallValidator`, `OutputNormalizer` | • Round-trip сериализация `ChatData` без потери типов и с сохранением `UnknownPart`.<br>• Идемпотентность `OutputNormalizer` на произвольных вложенных типах (`datetime`, `Decimal`, `BaseModel`).<br>• Отклонение битых инвариантов I1–I6 валидатором. |
 | **2. Provider Contract Suite (Записанные фикстуры)** | Все реализации `ChatGenerationPort`, `StreamingChatPort`, `EmbeddingPort`, `ClassificationPort` | • Обычный текст, мультимодальный ответ, `StructuredDataPart`, `ReasoningPart` с `signature`.<br>• Пакетный вызов инструментов и сборка фрагментированных JSON-аргументов из стрима.<br>• Трансляция HTTP `400`, `401`, `429`, `500`, `503` и сетевых тайм-аутов в канонический `FrameworkError`. |
 | **3. State & Concurrency Tests** | `ChatSession`, `Runner`, `ToolExecutor` (с фейковыми портами и искусственными задержками) | • Гарантия `TurnInProgressError` при параллельном запуске двух `runner.run()` на одной сессии.<br>• Гарантия `ModelSwitchMidTurnError` во всех нетерминальных фазах `TurnState`.<br>• Сохранение строгого порядка `ToolExecutionOutcome` в `execute_batch()` при случайном времени работы тулов.<br>• Гарантия отсутствия мутации `ChatSession.messages` при обрыве стрима (`aclose()`) или отмене через `CancellationToken`. |
-
----
-
-### Хотите ли вы уточнить или детализировать что-то из следующего?
-Архитектура полностью замкнута и готова к кодогенерации. Если планируете переходить к реализации, скажите, нужно ли:
-1. Детализировать структуру пакетов и модулей Python-проекта (layout директорий `core/`, `adapters/`, `drivers/`, `Session/`, `tools/`)?
-2. Подробнее расписать протокол взаимодействия с вашим классификатором **Jev** (формат входа/выхода, батчинг, локальный/сетевой запуск)?
-3. Спроектировать пошаговый план написания кода (Milestone 1 $\rightarrow$ Milestone N) для первой рабочей итерации?

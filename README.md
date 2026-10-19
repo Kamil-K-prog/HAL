@@ -1,5 +1,7 @@
 
-# HAL — Heterogeneous AI Layer
+<p align="center">
+  <img src=".github/assets/banner.jpg" alt="HAL Banner" width="100%">
+</p>
 
 > *«I'm sorry, Dave. I'm afraid I can't do that.»* 
 

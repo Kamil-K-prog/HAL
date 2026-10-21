@@ -169,7 +169,7 @@ class CompatibilityRules(BaseModel):
 class ModelProfile(BaseModel):
     """Полная декларативная спецификация модели (может загружаться из JSON/YAML)."""
     profile_id: str
-    model_name: str
+    model_id: str
     provider_id: str
     api_surface: str                           # "openai_chat", "openai_responses", "google_genai", "jev_grpc", ...
     capabilities: ModelCapabilities
@@ -269,7 +269,7 @@ class EmbeddingVector:
 class EmbeddingResult:
     vectors: list[EmbeddingVector]
     dimensions: int
-    model_name: str
+    model_id: str
     usage: UsageStats
 
 @dataclass
@@ -281,7 +281,7 @@ class ClassificationPrediction:
 @dataclass
 class ClassificationResult:
     predictions: list[list[ClassificationPrediction]]  # По одному списку на каждый входной элемент
-    model_name: str
+    model_id: str
     latency_ms: int
 ```
 
@@ -308,7 +308,7 @@ class ModelExecutionIdentity(BaseModel):
     """Нормализованная криптографически устойчивая идентичность конфигурации модели."""
     provider_id: str
     provider_instance_id: str                  # Безопасный ID хоста/аккаунта без API-ключа
-    model_name: str
+    model_id: str
     api_surface: str
     profile_id: str
     configuration_fingerprint: str             # SHA-256 от канонического JSON значимых параметров генерации и тулов
@@ -317,7 +317,7 @@ class ModelExecutionIdentity(BaseModel):
 #### Правила Mid-Turn Guard и переключения моделей:
 1. **Единственный источник истины — `TurnState`:** `ChatSession` хранит явное состояние активного хода (`active_turn`). Эвристики по «последнему сообщению в списке» запрещены.
 2. **Блокировка переключения:** пока `active_turn` находится в нетерминальном статусе (`generating`, `awaiting_tool_results`, `awaiting_model`, `committing`), вызов `session.switch_model()` выбрасывает `ModelSwitchMidTurnError`.
-3. **Точная идемпотентность:** `switch_model()` сравнивает полный `ModelExecutionIdentity`. Если изменился `api_surface`, системный промпт или `provider_instance_id` при том же `model_name`, событие переключения корректно фиксируется.
+3. **Точная идемпотентность:** `switch_model()` сравнивает полный `ModelExecutionIdentity`. Если изменился `api_surface`, системный промпт или `provider_instance_id` при том же `model_id`, событие переключения корректно фиксируется.
 4. **Структурированная причина:** `switch_model(new_identity, reason_code="capability_fallback", reason_detail="...")` записывает машиночитаемую причину в аудиторский `Event`.
 
 ---
@@ -1272,7 +1272,7 @@ class Redactor:
 ```
 
 #### Собираемые метрики (`TelemetryPort`):
-- Латентность (`TTFT` — Time To First Token и полная длительность) и число ретраев в разрезе `(provider_id, model_name, api_surface)`.
+- Латентность (`TTFT` — Time To First Token и полная длительность) и число ретраев в разрезе `(provider_id, model_id, api_surface)`.
 - Расход токенов (`input`, `output`, `reasoning`, `cached_input`).
 - Длительность и статус каждого вызова инструмента в `ToolExecutor`.
 - Статистика `ContextPreprocessor`: размер сжатия по `CompressionCheckpoint`, количество срабатываний мультимодального фоллбэка и отброшенных `provider_extensions`.

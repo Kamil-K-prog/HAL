@@ -18,6 +18,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
+.benchmarks/
 
 # Application generated media (config.settings.MEDIA_FOLDER)
 /media/

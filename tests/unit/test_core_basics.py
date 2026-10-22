@@ -543,3 +543,74 @@ class TestHalErrorHierarchy:
             assert restored.user_message == "Dynamic error message"
         finally:
             HalError._registry.pop(custom_code, None)
+
+
+class TestPackageExports:
+    """Тесты реэкспорта через hal.core и корневой hal."""
+
+    def test_hal_core_exports(self) -> None:
+        import hal.core
+
+        expected_symbols = {
+            "AssetStorageError",
+            "ConfigurationError",
+            "ContextPreparationError",
+            "DuplicateMessageError",
+            "ErrorCategory",
+            "FrameworkError",
+            "HalCancellationError",
+            "HalError",
+            "HalTimeoutError",
+            "HistoryValidationError",
+            "IdFactory",
+            "InvalidTurnStateError",
+            "ModelExecutionIdentity",
+            "ModelSwitchMidTurnError",
+            "PolicyDeniedError",
+            "ProviderResponseError",
+            "RateLimitError",
+            "SwitchReasonCode",
+            "ToolExecutionError",
+            "TransportError",
+            "TurnInProgressError",
+            "UnsupportedCapabilityError",
+            "UnsupportedMediaError",
+            "VersionConflictError",
+        }
+        assert set(hal.core.__all__) == expected_symbols
+        for symbol in expected_symbols:
+            assert hasattr(hal.core, symbol)
+
+    def test_hal_root_exports(self) -> None:
+        import hal
+
+        expected_symbols = {
+            "AssetStorageError",
+            "ConfigurationError",
+            "ContextPreparationError",
+            "DuplicateMessageError",
+            "ErrorCategory",
+            "FrameworkError",
+            "HalCancellationError",
+            "HalError",
+            "HalTimeoutError",
+            "HistoryValidationError",
+            "IdFactory",
+            "InvalidTurnStateError",
+            "ModelExecutionIdentity",
+            "ModelSwitchMidTurnError",
+            "PolicyDeniedError",
+            "ProviderResponseError",
+            "RateLimitError",
+            "SwitchReasonCode",
+            "ToolExecutionError",
+            "TransportError",
+            "TurnInProgressError",
+            "UnsupportedCapabilityError",
+            "UnsupportedMediaError",
+            "VersionConflictError",
+        }
+        assert set(hal.__all__) == expected_symbols
+        for symbol in expected_symbols:
+            assert hasattr(hal, symbol)
+

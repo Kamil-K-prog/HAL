@@ -114,23 +114,36 @@
 Для предотвращения комбинаторного взрыва классов инфраструктура отделена от декларативных характеристик модели:
 
 ```python
+TaskType = Literal["chat", "embedding", "classification", "image_gen", "audio_gen", "video_gen"]
+ModalityType = Literal["text", "image", "audio", "video", "document"]
+RoleSequence = Literal["openai", "google", "anthropic", "generic"]
+ReasoningPolicy = Literal["preserve_same_provider", "strip", "transform_to_text"]
+APISurface = Literal[
+    "openai_chat", "openai_responses", "google_genai", "anthropic_messages", "jev_grpc"
+]
+
+
 class RetryPolicy(BaseModel):
     """Единая политика повторов сетевых запросов на уровне транспорта."""
-    max_attempts: int = 3
-    initial_backoff_sec: float = 1.0
-    max_backoff_sec: float = 30.0
-    backoff_multiplier: float = 2.0
+    model_config = ConfigDict(frozen=True)
+
+    max_attempts: int = Field(default=3, ge=1)
+    initial_backoff_sec: float = Field(default=5.0, gt=0)
+    max_backoff_sec: float = Field(default=60, gt=0)
+    backoff_multiplier: float = Field(default=2, ge=1)
     jitter: bool = True
     retryable_status_codes: tuple[int, ...] = (408, 429, 500, 502, 503, 504)
 
 
 class ProviderConfig(BaseModel):
     """Инфраструктурная конфигурация хостинга и авторизации."""
+    model_config = ConfigDict(frozen=True)
+
     provider_id: str                           # "openai", "genai", "moonshot", "local_vllm", "jev_local"
-    provider_instance_id: str                  # Безопасный ID инстанса/аккаунта (без секретов, для аудит-трейла)
-    base_url: Optional[str] = None
-    api_key_env_var: Optional[str] = None      # Имя переменной окружения (сам ключ не сериализуется в логи/снимки)
-    timeout_sec: float = 60.0
+    provider_instance_id: str = "default"      # Безопасный ID инстанса/аккаунта (без секретов, для аудит-трейла)
+    base_url: str | None = None
+    api_key_env_var: str | None = None         # Имя переменной окружения (сам ключ не сериализуется в логи/снимки)
+    timeout_sec: float = Field(default=60.0, gt=0)
     default_headers: dict[str, str] = Field(default_factory=dict)
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
 ```
@@ -138,40 +151,50 @@ class ProviderConfig(BaseModel):
 ```python
 class ModelCapabilities(BaseModel):
     """Декларативная матрица возможностей модели."""
-    task_types: set[Literal["chat", "embedding", "classification", "image_gen", "audio_gen", "video_gen"]]
+    model_config = ConfigDict(frozen=True)
+
+    task_types: set[TaskType] = Field(min_length=1)
     supports_streaming: bool = True
     supports_tools: bool = False
     supports_parallel_tool_calls: bool = False
     supports_strict_tool_schema: bool = False
     supports_structured_output: bool = False
     supports_prompt_caching: bool = False
-    input_modalities: set[Literal["text", "image", "audio", "video", "document"]] = {"text"}
-    output_modalities: set[Literal["text", "image", "audio", "video"]] = {"text"}
+    input_modalities: set[ModalityType] = Field(min_length=1, default={"text"})
+    output_modalities: set[ModalityType] = Field(min_length=1, default={"text"})
 
 
 class ModelLimits(BaseModel):
     """Бюджетные и протокольные лимиты модели."""
-    max_context_tokens: int = 128_000
-    max_output_tokens: int = 4_096
-    reserve_output_tokens: int = 1_024
-    max_inline_asset_bytes: int = 15 * 1024 * 1024  # Вместо хардкода 20 МБ
-    allowed_mime_types: Optional[set[str]] = None   # None = все для поддерживаемых модальностей
+    model_config = ConfigDict(frozen=True)
+
+    max_context_tokens: int = Field(default=128_000, gt=0)
+    max_output_tokens: int = Field(default=4_096, gt=0)
+    reserve_output_tokens: int = Field(default=1_024, ge=0)
+    max_inline_asset_bytes: int = Field(default=15 * 1024 * 1024, ge=0)  # Вместо хардкода 20 МБ
+    allowed_mime_types: set[str] | None = None   # None = все для поддерживаемых модальностей
 
 
 class CompatibilityRules(BaseModel):
     """Правила проекции истории под капризы конкретного протокола."""
-    role_sequence_policy: Literal["openai", "google", "anthropic", "generic"] = "openai"
-    reasoning_policy: Literal["preserve_same_provider", "strip", "transform_to_text"] = "preserve_same_provider"
-    require_thought_signature_on_tools: bool = False  # True для Gemini 2.5/3 Thinking
+    model_config = ConfigDict(frozen=True)
+
+    role_sequence_policy: RoleSequence = "openai"
+    reasoning_policy: ReasoningPolicy = "preserve_same_provider"  # Политика для мыслей из прошлых ходов
+    preserve_thoughts_in_react: bool = True                       # Сохранять ли мысли внутри активного ReAct-хода
+    require_thought_signature_on_tools: bool = False              # True для Gemini 2.5/3 Thinking
     disallowed_generation_params: set[str] = Field(default_factory=set)  # Например, {"temperature"} для o1/o3
 
 
 class ModelProfile(BaseModel):
     """Полная декларативная спецификация модели (может загружаться из JSON/YAML)."""
+    model_config = ConfigDict(frozen=True)
+
     profile_id: str
-    model_id: str
+    model_id: str                              # ID в API
+    model_name: str | None = None              # Человекочитаемое имя (по умолчанию вычисляется из model_id)
     provider_id: str
-    api_surface: str                           # "openai_chat", "openai_responses", "google_genai", "jev_grpc", ...
+    api_surface: APISurface = "openai_chat"
     capabilities: ModelCapabilities
     limits: ModelLimits = Field(default_factory=ModelLimits)
     compatibility: CompatibilityRules = Field(default_factory=CompatibilityRules)
@@ -703,9 +726,10 @@ class CloudStorageDriver(Protocol):
    - При политике `ERROR` — выбрасывает `UnsupportedMediaError`.
    - При политике `PLACEHOLDER` — в проекции (не в оригинальной истории!) заменяет `AssetPart` на `TextPart("[Вложение {mime_type} пропущено: не поддерживается моделью]")`.
    - При политике `DESCRIBE` — запрашивает из `Asset.representations` подходящее представление (`description` / `transcription` / `ocr`) или вызывает `MediaDescriber`, сохраняя результат в кэш ассета, и подставляет `TextPart` в проекцию.
-3. **`ReasoningAndExtensionStrategy`:** управляет переносом провайдер-специфичных полей:
-   - Если `ReasoningPart.provider != profile.provider_id`, криптографическая подпись `signature` и несовместимые `provider_extensions` удаляются с записью предупреждения в `CompatibilityIssue(issue_type="provider_state_dropped")`.
-   - Если целевая модель требует `thought_signature` на `ToolCallPart` (например, Gemini 2.5/3 внутри одного хода), проверяет её наличие.
+3. **`ReasoningAndExtensionStrategy`:** управляет переносом провайдер-специфичных полей и блоков рассуждений:
+   - Для прошлых завершённых ходов применяется `profile.compatibility.reasoning_policy` (`"preserve_same_provider"`, `"strip"` или `"transform_to_text"`). Если `ReasoningPart.provider_id != profile.provider_id`, криптографическая подпись `signature` и несовместимые `provider_extensions` удаляются с записью предупреждения в `CompatibilityIssue(issue_type="provider_state_dropped")`.
+   - Внутри активного ReAct-хода сохранение промежуточных рассуждений управляется флагом `profile.compatibility.preserve_thoughts_in_react` (позволяет сохранять мысли текущего цикла вызова инструментов даже при `reasoning_policy="strip"`, как того требует DeepSeek-R1).
+   - Если целевая модель требует `thought_signature` на `ToolCallPart` (`require_thought_signature_on_tools=True`, например, Gemini 2.5/3 внутри одного хода), проверяет её наличие.
 4. **`RoleSequenceNormalizer`:** приводит чередование ролей к требованиям протокола (`google` — первое сообщение `user`, строгий альтернейтинг; `anthropic` — вынос `system` в отдельный параметр; слияние соседних однородных ролей).
 5. **`ContextBudgeter` и `TokenizerPort`:** оценивает число токенов проекции через `TokenizerPort`. Если размер превышает `max_context_tokens - reserve_output_tokens`:
    - Применяет виртуальную проекцию по последнему `CompressionCheckpoint` из `ChatData.metadata.compression_checkpoints`.

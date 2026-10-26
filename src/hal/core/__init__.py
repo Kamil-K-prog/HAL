@@ -1,3 +1,6 @@
+from hal.core.cancellation import (
+    CancellationToken,
+)
 from hal.core.errors import (
     AssetStorageError,
     ConfigurationError,
@@ -28,9 +31,25 @@ from hal.core.identity import (
 from hal.core.ids import (
     IdFactory,
 )
+from hal.core.profiles import (
+    APISurface,
+    CompatibilityRules,
+    ModalityType,
+    ModelCapabilities,
+    ModelLimits,
+    ModelProfile,
+    ProviderConfig,
+    ReasoningPolicy,
+    RetryPolicy,
+    RoleSequence,
+    TaskType,
+)
 
 __all__ = [
+    "APISurface",
     "AssetStorageError",
+    "CancellationToken",
+    "CompatibilityRules",
     "ConfigurationError",
     "ContextPreparationError",
     "DuplicateMessageError",
@@ -42,12 +61,21 @@ __all__ = [
     "HistoryValidationError",
     "IdFactory",
     "InvalidTurnStateError",
+    "ModalityType",
+    "ModelCapabilities",
     "ModelExecutionIdentity",
+    "ModelLimits",
+    "ModelProfile",
     "ModelSwitchMidTurnError",
     "PolicyDeniedError",
+    "ProviderConfig",
     "ProviderResponseError",
     "RateLimitError",
+    "ReasoningPolicy",
+    "RetryPolicy",
+    "RoleSequence",
     "SwitchReasonCode",
+    "TaskType",
     "ToolExecutionError",
     "TransportError",
     "TurnInProgressError",

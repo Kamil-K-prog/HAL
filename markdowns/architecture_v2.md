@@ -498,7 +498,9 @@ class ToolExecutor:
 Для защиты от зависаний, бесконечных циклов и неконтролируемого расхода токенов `Runner` руководствуется декларативной политикой `RunPolicy`:
 
 ```python
-FinishReason = Literal[
+# Причина завершения ВСЕГО хода Runner (уровень оркестратора, src/hal/runner/policy.py).
+# Не путать с GenerationFinishReason из УФС (причина остановки одного сетевого шага модели).
+TurnFinishReason = Literal[
     "stop",                  # Естественное завершение ответа моделью
     "max_iterations",        # Достигнут лимит шагов ReAct
     "max_tool_calls",        # Достигнут общий лимит вызовов инструментов за ход
@@ -628,7 +630,7 @@ class RunCompletedEvent(BaseRunnerEvent):
     """Финальное событие успешного завершения ReAct-цикла (после commit в ChatSession)."""
     type: Literal["run_completed"] = "run_completed"
     commit_status: Literal["committed"] = "committed"
-    finish_reason: FinishReason
+    finish_reason: TurnFinishReason
     committed_delta: list[Message]
     total_usage: UsageStats
     new_session_version: int
@@ -682,7 +684,7 @@ class AssetRepresentation(BaseModel):
     model_identity: str                        # Какая модель сгенерировала описание
     language: str = "ru"
     content_sha256: str                        # Для автоматической инвалидации при изменении файла
-    created_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     params: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -793,10 +795,10 @@ class FrameworkError(BaseModel):
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Annotated, Any, Literal, Optional
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal, Optional, get_args
 import ulid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -832,25 +834,72 @@ class IdFactory:
 
 
 # ══════════════════════════════════════════════════════════════════
-# 1. АССЕТЫ, ПРЕДСТАВЛЕНИЯ И ОБЛАЧНЫЕ ССЫЛКИ
+# 1. ЛИТЕРАЛЫ И РЕЕСТР ТИПОВ ЧАСТЕЙ
+# ══════════════════════════════════════════════════════════════════
+
+AssetRepresentationKind = Literal[
+    "description",     # Сгенерированное моделью описание
+    "transcription",   # Расшифровка аудио/видео
+    "ocr",             # Распознавание текста на изображениях/сканах
+    "extracted_text",  # Программное извлечение текста из документов (без OCR)
+]
+AssetKind = Literal["image", "audio", "video", "document"]
+ToolCallStatus = Literal["pending", "executing", "completed", "failed", "cancelled", "denied"]
+TurnStatus = Literal[
+    "generating", "awaiting_tool_results", "awaiting_model", "committing",
+    "completed", "failed", "cancelled",
+]
+CompressionStrategy = Literal["truncate_old_tools", "llm_summary", "hybrid", "sliding_window"]
+
+# Причина остановки ОДНОГО сетевого шага генерации (нормализуется драйвером из ответа провайдера).
+# Причина завершения всего хода — TurnFinishReason (src/hal/runner/policy.py, раздел 5.1).
+GenerationFinishReason = Literal[
+    "tool_call",            # Модель решила вызвать инструмент
+    "max_output_limit",     # Упирание в лимит генерации токенов
+    "safeguard_triggered",  # На стороне провайдера сработали фильтры
+    "turn_completed",       # Модель выдала итоговое сообщение без вызова инструментов
+]
+
+_REGISTRY: dict[str, type[BaseModel]] = {}
+
+
+def register_type[T: BaseModel](cls: type[T]) -> type[T]:
+    """Декоратор: регистрирует Part-класс по значению его Literal-поля `type`.
+    Реестр — единственный источник истины об известных типах частей (используется для I9)."""
+    ...
+
+
+# ══════════════════════════════════════════════════════════════════
+# 2. АССЕТЫ, ПРЕДСТАВЛЕНИЯ И ОБЛАЧНЫЕ ССЫЛКИ
 # ══════════════════════════════════════════════════════════════════
 
 class CloudRef(BaseModel):
     """Ссылка на файл во внешнем Files API провайдера."""
     provider_id: str
-    cloud_id: Optional[str] = None
-    uri: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    cloud_id: str | None = None
+    uri: str | None = None
+    expires_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetRepresentation(BaseModel):
+    """Типизированное текстовое представление медиа-файла (см. раздел 6.1)."""
+    kind: AssetRepresentationKind
+    text: str
+    model_identity: str                       # Кто сгенерировал представление
+    language: str = "ru"
+    content_sha256: str                       # Для инвалидации кэша при изменении файла
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class Asset(BaseModel):
     """Провайдеронезависимая модель медиа-файла (без inline base64 в истории)."""
     id: str                                   # ast_xxx
-    kind: Literal["image", "audio", "video", "document"]
+    kind: AssetKind
     storage_uri: str                          # URI в AssetStore (file://, s3://, mem://)
     mime_type: str
-    size_bytes: int = 0
+    size_bytes: int = Field(default=0, ge=0)
     sha256: str
     status: Literal["pending", "materialized", "uploaded", "expired", "failed"] = "materialized"
     representations: dict[str, AssetRepresentation] = Field(default_factory=dict)
@@ -858,27 +907,31 @@ class Asset(BaseModel):
 
 
 # ══════════════════════════════════════════════════════════════════
-# 2. ЧАСТИ СООБЩЕНИЙ (MESSAGE PARTS)
+# 3. ЧАСТИ СООБЩЕНИЙ (MESSAGE PARTS)
 # ══════════════════════════════════════════════════════════════════
 
+@register_type
 class TextPart(BaseModel):
     type: Literal["text"] = "text"
     text: str
-    cache_control: Optional[Literal["ephemeral"]] = None  # Маркер для Prompt Caching
+    cache_control: Literal["ephemeral"] | None = None  # Маркер для Prompt Caching
 
 
+@register_type
 class ReasoningPart(BaseModel):
     type: Literal["reasoning"] = "reasoning"
     text: str = ""
-    signature: Optional[str] = None           # Криптографическая подпись (напр. Gemini thought_signature)
-    provider_id: Optional[str] = None
+    signature: str | None = None              # Криптографическая подпись (напр. Gemini thought_signature)
+    provider_id: str | None = None
 
 
+@register_type
 class AssetPart(BaseModel):
     type: Literal["asset"] = "asset"
     asset: Asset
 
 
+@register_type
 class StructuredDataPart(BaseModel):
     """Типизированный JSON-ответ при использовании Structured Outputs (response_schema)."""
     type: Literal["structured_data"] = "structured_data"
@@ -886,6 +939,7 @@ class StructuredDataPart(BaseModel):
     data: dict[str, Any]
 
 
+@register_type
 class ToolCallPart(BaseModel):
     type: Literal["tool_call"] = "tool_call"
     call_id: str                              # call_xxx
@@ -894,15 +948,17 @@ class ToolCallPart(BaseModel):
     provider_extensions: dict[str, Any] = Field(default_factory=dict)  # Изолированные метаданные провайдера
 
 
+@register_type
 class ToolResultPart(BaseModel):
     type: Literal["tool_result"] = "tool_result"
     call_id: str
     name: str
     text: str
-    error: Optional[FrameworkError] = None
+    error: FrameworkError | None = None
     assets: list[Asset] = Field(default_factory=list)
 
 
+@register_type
 class UnknownPart(BaseModel):
     """Защитный контейнер для прямой совместимости при загрузке более новых версий схемы (I9)."""
     type: Literal["unknown"] = "unknown"
@@ -910,51 +966,65 @@ class UnknownPart(BaseModel):
     raw_payload: dict[str, Any]
 
 
+def _transform_unknown_type(data: Any) -> Any:
+    """BeforeValidator (I9): словарь с незарегистрированным `type` превращается в UnknownPart.
+    Уже сконструированные объекты и известные типы пропускаются без изменений."""
+    if isinstance(data, dict):
+        part_type = data.get("type")
+        if isinstance(part_type, str) and part_type not in _REGISTRY:
+            return {"type": "unknown", "original_type": part_type, "raw_payload": data}
+    return data
+
+
+# Внешний BeforeValidator срабатывает ДО внутреннего дискриминатора
 MessagePart = Annotated[
-    TextPart
-    | ReasoningPart
-    | AssetPart
-    | StructuredDataPart
-    | ToolCallPart
-    | ToolResultPart
-    | UnknownPart,
-    Field(discriminator="type"),
+    Annotated[
+        TextPart
+        | ReasoningPart
+        | AssetPart
+        | StructuredDataPart
+        | ToolCallPart
+        | ToolResultPart
+        | UnknownPart,
+        Field(discriminator="type"),
+    ],
+    BeforeValidator(_transform_unknown_type),
 ]
 
 
 # ══════════════════════════════════════════════════════════════════
-# 3. СООБЩЕНИЯ, АУДИТОРСКИЕ СОБЫТИЯ И СТАТИСТИКА
+# 4. СООБЩЕНИЯ, АУДИТОРСКИЕ СОБЫТИЯ И СТАТИСТИКА
 # ══════════════════════════════════════════════════════════════════
 
 class UsageStats(BaseModel):
-    input_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
-    cached_input_tokens: int = 0              # Поддержка Context Caching
-    total_tokens: int = 0
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    reasoning_tokens: int = Field(default=0, ge=0)
+    cached_input_tokens: int = Field(default=0, ge=0)  # Поддержка Context Caching
+    total_tokens: int = Field(ge=0)
 
 
 class GenerationMetadata(BaseModel):
     execution_identity: ModelExecutionIdentity
-    usage: Optional[UsageStats] = None
-    finish_reason: Optional[FinishReason] = None
-    latency_ms: Optional[int] = None
+    usage: UsageStats | None = None
+    finish_reason: GenerationFinishReason | None = None
+    latency_ms: int | None = Field(default=None, ge=0)
     provider_extensions: dict[str, Any] = Field(default_factory=dict)
 
 
 class Message(BaseModel):
     """Каноническое сообщение диалога (УФС 2.0)."""
     id: str                                   # msg_xxx
-    timestamp: datetime
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     role: Literal["system", "user", "assistant", "tool"]
     parts: list[MessagePart] = Field(default_factory=list)
-    metadata: Optional[GenerationMetadata] = None
+    metadata: GenerationMetadata | None = None
 
 
 class Event(BaseModel):
     """Аудиторское/техническое событие (хранится отдельно от messages)."""
     id: str                                   # evt_xxx
-    timestamp: datetime
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     type: Literal[
         "model_switch",
         "compression_anchor",
@@ -972,7 +1042,7 @@ class Event(BaseModel):
 
 
 # ══════════════════════════════════════════════════════════════════
-# 4. СОСТОЯНИЕ ХОДА (TURN STATE) И КОРНЕВОЙ КОНТЕЙНЕР (CHAT DATA)
+# 5. СОСТОЯНИЕ ХОДА (TURN STATE) И КОРНЕВОЙ КОНТЕЙНЕР (CHAT DATA)
 # ══════════════════════════════════════════════════════════════════
 
 class PendingToolCall(BaseModel):
@@ -982,39 +1052,36 @@ class PendingToolCall(BaseModel):
     assistant_message_id: str
     name: str
     args_hash: str
-    status: Literal["pending", "executing", "completed", "failed", "cancelled", "denied"]
-    result_message_id: Optional[str] = None
+    status: ToolCallStatus
+    result_message_id: str | None = None
 
 
 class TurnState(BaseModel):
     turn_id: str                              # trn_xxx
     execution_identity: ModelExecutionIdentity
-    status: Literal[
-        "generating", "awaiting_tool_results", "awaiting_model", "committing",
-        "completed", "failed", "cancelled"
-    ]
+    status: TurnStatus
     pending_tool_calls: list[PendingToolCall] = Field(default_factory=list)
-    started_at: datetime
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CompressionCheckpoint(BaseModel):
     checkpoint_id: str                        # cmp_xxx
-    created_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     compressed_range_start: str
     compressed_range_end: str
     compressed_messages: list[Message]
     original_message_count: int
     original_token_count: int
     compressed_token_count: int
-    strategy: Literal["truncate_old_tools", "llm_summary", "hybrid", "sliding_window"]
+    strategy: CompressionStrategy
     compression_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatMetadata(BaseModel):
     schema_version: Literal["2.0"] = "2.0"
     conversation_id: str
-    created_at: datetime
-    active_model_identity: Optional[ModelExecutionIdentity] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    active_model_identity: ModelExecutionIdentity | None = None
     compression_checkpoints: list[CompressionCheckpoint] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -1024,7 +1091,7 @@ class ChatData(BaseModel):
     metadata: ChatMetadata
     messages: list[Message] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)
-    active_turn: Optional[TurnState] = None
+    active_turn: TurnState | None = None
 ```
 
 ---

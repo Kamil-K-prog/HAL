@@ -42,13 +42,13 @@
     - `ModelProfile` (полный манифест модели, авто-вычисление `model_name`, загрузка/выгрузка YAML).
   - **Фокус тестов:** Дефолтные значения, валидация полей, сериализация и десериализация из JSON/YAML.
 
-- [ ] **Шаг 3: `src/hal/core/umf.py`**
+- [x] **Шаг 3: `src/hal/core/umf.py`**
   - **Что внутри:** Полная модель Универсального Формата Сообщений (УФС 2.0).
   - **Логика:**
     - Модели ассетов: `CloudRef`, `AssetRepresentation`, `Asset`.
     - Части сообщений (`MessagePart`): `TextPart`, `ReasoningPart`, `AssetPart`, `StructuredDataPart`, `ToolCallPart`, `ToolResultPart`.
     - Защитный контейнер `UnknownPart` и **Инвариант I9**: перехват неизвестных типов дискриминатора при парсинге JSON без падения.
-    - Метаданные и контейнеры: `UsageStats`, `FinishReason`, `GenerationMetadata`, `Message`, `Event`.
+    - Метаданные и контейнеры: `UsageStats`, `GenerationFinishReason`, `GenerationMetadata`, `Message`, `Event`.
     - Структуры ходов и компрессии: `PendingToolCall`, `TurnState`, `CompressionCheckpoint`, `ChatMetadata`, `ChatData`.
   - **Фокус тестов:** Round-trip сериализация `ChatData` $\rightarrow$ JSON $\rightarrow$ `ChatData`, проверка полиморфизма частей сообщений, валидатор неизвестных частей.
 
@@ -108,7 +108,7 @@
 - [ ] **Шаг 9: События и политики ReAct (`src/hal/runner/policy.py` + `events.py`)**
   - **Что внутри:** Правила запуска и канонические стриминговые события.
   - **Логика:**
-    - `RunPolicy` (лимиты итераций, вызовов тулов, таймауты).
+    - `RunPolicy` (лимиты итераций, вызовов тулов, таймауты) и `TurnFinishReason` (причина завершения хода).
     - Иерархия `RunnerEvent` (`ContentDeltaEvent`, `ThinkingDeltaEvent`, `ToolEvent`, `StepCompletedEvent`, `RunCompletedEvent`, `RunErrorEvent`, `RunCancelledEvent`).
     - Монотонная нумерация `sequence_no` внутри хода.
   - **Фокус тестов:** Сериализация событий, валидация Discriminated Union по полю `type`.

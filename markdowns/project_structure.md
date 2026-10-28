@@ -58,7 +58,7 @@ hal/
 │       ├── runner/                 # 🟠 СЛОЙ 3: Оркестратор ReAct и потоковые события
 │       │   ├── __init__.py
 │       │   ├── events.py           # Иерархия RunnerEvent (ContentDeltaEvent, ToolEvent, RunCompletedEvent...)
-│       │   ├── policy.py           # RunPolicy, FinishReason
+│       │   ├── policy.py           # RunPolicy, TurnFinishReason
 │       │   ├── runner.py           # Runner (асинхронный оркестратор)
 │       │   └── sync.py             # SyncRunner, BackgroundLoopPortal (для синхронного запуска)
 │       │

@@ -545,6 +545,36 @@ class TestHalErrorHierarchy:
             HalError._registry.pop(custom_code, None)
 
 
+UMF_SYMBOLS = {
+    "Asset",
+    "AssetKind",
+    "AssetPart",
+    "AssetRepresentation",
+    "AssetRepresentationKind",
+    "ChatData",
+    "ChatMetadata",
+    "CloudRef",
+    "CompressionCheckpoint",
+    "CompressionStrategy",
+    "Event",
+    "GenerationFinishReason",
+    "GenerationMetadata",
+    "Message",
+    "MessagePart",
+    "PendingToolCall",
+    "ReasoningPart",
+    "StructuredDataPart",
+    "TextPart",
+    "ToolCallPart",
+    "ToolCallStatus",
+    "ToolResultPart",
+    "TurnState",
+    "TurnStatus",
+    "UnknownPart",
+    "UsageStats",
+}
+
+
 class TestPackageExports:
     """Тесты реэкспорта через hal.core и корневой hal."""
 
@@ -589,6 +619,7 @@ class TestPackageExports:
             "UnsupportedMediaError",
             "VersionConflictError",
         }
+        expected_symbols |= UMF_SYMBOLS
         assert set(hal.core.__all__) == expected_symbols
         for symbol in expected_symbols:
             assert hasattr(hal.core, symbol)
@@ -634,6 +665,7 @@ class TestPackageExports:
             "UnsupportedMediaError",
             "VersionConflictError",
         }
+        expected_symbols |= UMF_SYMBOLS
         assert set(hal.__all__) == expected_symbols
         for symbol in expected_symbols:
             assert hasattr(hal, symbol)

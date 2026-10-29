@@ -55,7 +55,9 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM", "RUF"]
 # Кириллица в комментариях и докстрингах — норма для проекта
-ignore = ["RUF001", "RUF002", "RUF003"]
+ignore = ["RUF001", "RUF002", "RUF003",
+    #    "E501"
+]
 
 [tool.mypy]
 python_version = "3.12"

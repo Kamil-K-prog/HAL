@@ -52,6 +52,8 @@ GenerationFinishReason = Literal[
     "turn_completed",
 ]
 
+AssetStatus = Literal["pending", "materialized", "uploaded", "expired", "failed"]
+
 MessageRole = Literal["system", "user", "assistant", "tool"]
 
 _REGISTRY: dict[str, type[BaseModel]] = dict()
@@ -101,7 +103,7 @@ class Asset(BaseModel):
     mime_type: str
     size_bytes: int = Field(default=0, ge=0)
     sha256: str
-    status: Literal["pending", "materialized", "uploaded", "expired", "failed"] = "materialized"
+    status: AssetStatus = "materialized"
     representations: dict[str, AssetRepresentation] = Field(default_factory=dict)
     cloud_refs: dict[str, CloudRef] = Field(default_factory=dict)
 

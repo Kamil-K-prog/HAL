@@ -60,6 +60,7 @@ from hal.core.umf import (
     GenerationMetadata,
     Message,
     MessagePart,
+    MessageRole,
     PendingToolCall,
     ReasoningPart,
     StructuredDataPart,
@@ -104,6 +105,7 @@ __all__ = [
     "InvalidTurnStateError",
     "Message",
     "MessagePart",
+    "MessageRole",
     "ModalityType",
     "ModelCapabilities",
     "ModelExecutionIdentity",
@@ -135,5 +137,5 @@ __all__ = [
     "UnsupportedCapabilityError",
     "UnsupportedMediaError",
     "UsageStats",
-    "VersionConflictError",
+    "VersionConflictError"
 ]

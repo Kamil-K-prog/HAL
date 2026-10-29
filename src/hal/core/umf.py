@@ -52,6 +52,8 @@ GenerationFinishReason = Literal[
     "turn_completed",
 ]
 
+MessageRole = Literal["system", "user", "assistant", "tool"]
+
 _REGISTRY: dict[str, type[BaseModel]] = dict()
 
 
@@ -214,7 +216,7 @@ class Message(BaseModel):
 
     id: str  # msg_xxx
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    role: Literal["system", "user", "assistant", "tool"]
+    role: MessageRole
     parts: list[MessagePart] = Field(default_factory=list)
     metadata: GenerationMetadata | None = None
 

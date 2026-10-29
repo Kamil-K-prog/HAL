@@ -53,11 +53,13 @@
   - **Фокус тестов:** Round-trip сериализация `ChatData` $\rightarrow$ JSON $\rightarrow$ `ChatData`, проверка полиморфизма частей сообщений, валидатор неизвестных частей.
 
 - [ ] **Шаг 4: `src/hal/core/invariants.py`**
-  - **Что внутри:** `HistoryInvariantValidator`, `ValidationIssue`, `ValidationResult`.
+  - **Что внутри:** `InvariantCode`, `ValidationIssue`, `ValidationResult`, `HistoryInvariantValidator`.
   - **Логика:**
-    - `validate_history(messages)` и `validate_delta(current_messages, delta, active_identity)`.
-    - Проверка **I1** (уникальность ID, формат ULID через `IdFactory.validate`).
-    - Проверка **I2** (чистота ролей: `system` — только текст, `tool` — только результаты и т.д.).
+    - `validate_history(messages, active_identity)`: проверка списка сообщений (`I1`, `I2`, `I3 + I5`, `I6`).
+    - `validate_delta(current_messages, delta, active_identity)`: проверка дельты перед коммитом в `ChatSession`.
+    - `validate_snapshot(data: ChatData)`: полная проверка снимка сессии (`messages`, `events`, `compression_checkpoints`, `active_turn`).
+    - Проверка **I1** (уникальность ID, префиксы `msg_`, `call_`, `ast_`, `evt_`, `cmp_`, `trn_` и формат ULID через `IdFactory.validate`).
+    - Проверка **I2** (чистота ролей: `system` — только текст, `tool` — только результаты и т.д., с допуском `UnknownPart` по I9).
     - Проверка **I3 + I5** (пары вызов-результат тулов: соответствие `call_id` и детерминированный порядок).
   - **Фокус тестов:** Спектр позитивных и негативных сценариев с преднамеренным нарушением каждого инварианта.
 

@@ -743,12 +743,12 @@ class CloudStorageDriver(Protocol):
 
 ### 7.1. Формальные инварианты УФС 2.0 (I1–I9)
 
-- **I1 (Уникальность ID):** `Message.id`, `ToolCallPart.call_id`, `Asset.id` и `Event.id` глобально уникальны в рамках сессии (генерируются через `IdFactory` на базе ULID).
+- **I1 (Уникальность ID):** `Message.id`, `ToolCallPart.call_id`, `Asset.id`, `Event.id`, `CompressionCheckpoint.checkpoint_id` и `TurnState.turn_id` глобально уникальны в рамках сессии и имеют валидный ULID со своим обязательным префиксом (`msg_`, `call_`, `ast_`, `evt_`, `cmp_`, `trn_`).
 - **I2 (Чистота ролей):**
-  - `system`: только `TextPart`.
-  - `user`: `TextPart`, `AssetPart`.
-  - `assistant`: `TextPart`, `ReasoningPart`, `AssetPart`, `ToolCallPart`, `StructuredDataPart`.
-  - `tool`: только `ToolResultPart`.
+  - `system`: только `TextPart` (плюс `UnknownPart` для обратной совместимости по I9).
+  - `user`: `TextPart`, `AssetPart` (плюс `UnknownPart`).
+  - `assistant`: `TextPart`, `ReasoningPart`, `AssetPart`, `ToolCallPart`, `StructuredDataPart` (плюс `UnknownPart`).
+  - `tool`: только `ToolResultPart` (плюс `UnknownPart`).
 - **I3 (Полнота вызовов инструментов):** в зафиксированной истории (`ChatSession.messages`) за сообщением `assistant` с $N$ частями `ToolCallPart` обязано следовать сообщение `tool` (или последовательность сообщений `tool`), содержащее ровно $N$ соответствующих `ToolResultPart` с теми же `call_id`.
 - **I4 (Принадлежность вызовов — Ownership):** каждый активный вызов инструмента связан с `ModelExecutionIdentity` через `TurnState.pending_tool_calls`. Смена модели блокируется до закрытия всех pending calls.
 - **I5 (Детерминированный порядок):** порядок `ToolResultPart` в пакетном ответе строго соответствует порядку `ToolCallPart`, запрошенных моделью.
@@ -756,6 +756,51 @@ class CloudStorageDriver(Protocol):
 - **I7 (Отделение стрима от коммита):** частичные потоковые данные не хранятся в `ChatSession.messages`.
 - **I8 (Идемпотентность коммита):** повторный вызов `append_turn` с тем же `turn_id` не изменяет состояние и возвращает закэшированный `CommitResult(was_duplicate=True)`.
 - **I9 (Эволюция схемы):** неизвестные части при десериализации сохраняются в контейнер `UnknownPart` (политика `preserve`), предотвращая потерю данных при откатах версий библиотеки.
+
+#### Контракт валидатора (`src/hal/core/invariants.py`):
+```python
+InvariantCode = Literal["I1", "I2", "I3", "I4", "I5", "I6"]
+
+
+@dataclass(frozen=True)
+class ValidationIssue:
+    invariant: InvariantCode
+    message: str
+    message_id: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ValidationResult:
+    issues: list[ValidationIssue] = field(default_factory=list)
+
+    @property
+    def valid(self) -> bool:
+        return len(self.issues) == 0
+
+
+class HistoryInvariantValidator:
+    def validate_history(
+        self,
+        messages: Sequence[Message],
+        active_identity: ModelExecutionIdentity | None = None,
+    ) -> ValidationResult:
+        """Проверяет последовательность сообщений на соблюдение I1, I2, I3, I5, I6."""
+        ...
+
+    def validate_delta(
+        self,
+        current_messages: Sequence[Message],
+        delta: Sequence[Message],
+        active_identity: ModelExecutionIdentity | None = None,
+    ) -> ValidationResult:
+        """Проверяет добавляемую дельту сообщений относительно текущей истории (pre-commit в ChatSession)."""
+        ...
+
+    def validate_snapshot(self, data: ChatData) -> ValidationResult:
+        """Полная проверка снимка ChatData: messages, events (evt_), compression_checkpoints (cmp_) и active_turn (trn_, I4)."""
+        ...
+```
 
 ---
 
